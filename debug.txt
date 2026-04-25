@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "D:\ReproAgent\obs_debug.py", line 3, in <module>
+    env = ReproAgentEnv(difficulty='easy', max_steps=10, use_llm=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\ReproAgent\reproagent\environment.py", line 78, in __init__
+    self.llm = LLMClient(provider="mock")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\ReproAgent\reproagent\models.py", line 27, in __init__
+    print(f"\U0001f916 LLM initialized: {self.provider}")
+  File "C:\Users\sansk\anaconda3\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f916' in position 0: character maps to <undefined>

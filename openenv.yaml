@@ -1,0 +1,83 @@
+name: ReproAgent
+version: 1.0.0
+description: AI agent that automatically reproduces ML research papers
+
+environment:
+  id: reproagent-v1
+  entry_point: reproagent.environment:ReproAgentEnv
+  
+observation_space:
+  type: Dict
+  spaces:
+    paper_features:
+      type: Box
+      low: 0.0
+      high: 1.0
+      shape: [5]
+      dtype: float32
+    repo_features:
+      type: Box
+      low: 0.0
+      high: 1.0
+      shape: [5]
+      dtype: float32
+    execution_features:
+      type: Box
+      low: 0.0
+      high: 1.0
+      shape: [5]
+      dtype: float32
+    experiment_features:
+      type: Box
+      low: 0.0
+      high: 1.0
+      shape: [5]
+      dtype: float32
+    meta_features:
+      type: Box
+      low: 0.0
+      high: 1.0
+      shape: [5]
+      dtype: float32
+
+action_space:
+  type: Discrete
+  n: 50
+
+reward_range:
+  min: -100
+  max: 200
+
+max_episode_steps: 100
+
+tasks:
+  - name: easy
+    description: "Clean repository with good documentation, runs first time"
+    difficulty: 1
+    success_threshold: 0.95
+    
+  - name: medium
+    description: "Repository needs debugging and dependency fixes"
+    difficulty: 2
+    success_threshold: 0.90
+    
+  - name: hard
+    description: "No code available, must implement from scratch"
+    difficulty: 3
+    success_threshold: 0.85
+
+metadata:
+  author: ReproAgent Team
+  license: MIT
+  tags:
+    - research
+    - reproduction
+    - machine-learning
+    - debugging
+    - hyperparameter-tuning
+  frameworks:
+    - pytorch
+    - tensorflow
+    - jax
+  version: 1.0.0
+  creation_date: "2024"
