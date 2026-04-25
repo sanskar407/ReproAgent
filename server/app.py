@@ -14,6 +14,10 @@ import re
 import json
 import time
 import traceback
+import uuid
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Generator
 
@@ -28,6 +32,11 @@ from reproagent.state import PaperState
 from reproagent.models import LLMClient
 from reproagent.papers import create_sample_papers
 from agents.reasoning_agent import create_agent
+
+# Modular Easy Mode Imports
+from server.llm_handler import generate_summary_and_ppt_content
+from server.pdf_processor import extract_text_from_pdf as extract_text_fitz
+from server.ppt_generator import create_ppt
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +203,44 @@ Paper text (first 3000 chars):
     return {}
 
 
+def run_easy_mode(pdf_file: Any) -> Tuple[str, str]:
+    """Easy Mode: Summary + PPT generation using modular handlers."""
+    if not pdf_file:
+        return "Error: No file uploaded.", ""
+    
+    pdf_path = pdf_file.name if hasattr(pdf_file, 'name') else str(pdf_file)
+    safe_print(f"[EasyMode] Starting for {pdf_file}")
+    
+    safe_print("[EasyMode] Extracting text using fitz...")
+    text = extract_text_fitz(pdf_path)
+    if not text:
+        return "Error: Could not extract text from PDF.", ""
+    
+    # 1. Use modular LLM handler for summary and ppt structure
+    safe_print("[EasyMode] Calling Gemini via modular handler...")
+    data = generate_summary_and_ppt_content(text)
+    
+    paper_desc = data.get("description", "Failed to generate a description.")
+    slides_data = data.get("ppt_slides", [])
+    
+    if not slides_data:
+        # Fallback if no slides were generated
+        slides_data = [{"title": "Overview", "content": [paper_desc]}]
+
+    # 2. Use modular PPT generator
+    safe_print("[EasyMode] Generating premium PPT...")
+    ppt_filename = f"summary_{uuid.uuid4().hex[:8]}.pptx"
+    ppt_path = Path("data/tmp") / ppt_filename
+    ppt_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    create_ppt(slides_data, str(ppt_path))
+    
+    safe_print(f"[EasyMode] Saving PPT to {ppt_path}...")
+    safe_print("[EasyMode] Done.")
+    
+    return paper_desc, str(ppt_path)
+
+
 # ---------------------------------------------------------------------------
 #  Tab 1: Reproduce a Paper
 # ---------------------------------------------------------------------------
@@ -272,7 +319,8 @@ def run_paper_reproduction(
     paper_info = {}
     if use_llm:
         try:
-            llm_client = LLMClient()
+            # Enforce Groq for Medium/Advanced Mode
+            llm_client = LLMClient(provider="groq")
             if llm_client.provider != "mock":
                 yield (log(f"- Using **{llm_client.provider.upper()}** LLM for intelligent extraction"), "", "{}", "{}")
                 paper_info = extract_paper_info_llm(paper_text, llm_client)
@@ -750,6 +798,19 @@ def create_demo():
         </div>
         """)
 
+        # --- API Endpoints (Hidden) ---
+        with gr.Group(visible=False):
+            easy_mode_input = gr.File(label="Easy Input")
+            easy_mode_output_text = gr.Textbox(label="Easy Text")
+            easy_mode_output_file = gr.File(label="Easy File")
+            easy_mode_btn = gr.Button("run_easy_mode")
+            easy_mode_btn.click(
+                fn=run_easy_mode,
+                inputs=[easy_mode_input],
+                outputs=[easy_mode_output_text, easy_mode_output_file],
+                api_name="run_easy_mode"
+            )
+
         with gr.Tabs():
             # ============================================================
             #  TAB 1 — Reproduce a Paper
@@ -761,7 +822,6 @@ def create_demo():
                     with gr.Column(scale=1):
                         pdf_upload = gr.File(
                             label="Upload PDF",
-                            file_types=[".pdf"],
                             type="filepath",
                         )
                         paper_url = gr.Textbox(
@@ -819,6 +879,7 @@ def create_demo():
 
                 reproduce_btn.click(
                     fn=run_paper_reproduction,
+                    api_name="run_paper_reproduction",
                     inputs=[pdf_upload, paper_url, use_llm_tab1, max_steps_tab1, exec_mode, clone_dir_tab1],
                     outputs=[agent_log, paper_info_display, metrics_display, state_display],
                 )
@@ -914,7 +975,7 @@ def create_demo():
 if __name__ == "__main__":
     demo = create_demo()
     demo.launch(
-        server_name="0.0.0.0",
+        server_name="localhost",
         server_port=7860,
         share=True,
         show_error=True,

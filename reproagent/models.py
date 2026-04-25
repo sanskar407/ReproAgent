@@ -6,6 +6,7 @@ Supports multiple providers with unified interface.
 import os
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -19,7 +20,7 @@ class LLMClient:
     def __init__(self, provider: Optional[str] = None):
         """
         Args:
-            provider: 'groq', 'openai', 'huggingface', or None (auto-detect)
+            provider: 'gemini', 'groq', 'openai', 'huggingface', or None (auto-detect)
         """
         self.provider = provider or self._detect_provider()
         self.client = self._init_client()
@@ -31,7 +32,9 @@ class LLMClient:
     
     def _detect_provider(self) -> str:
         """Auto-detect available API."""
-        if os.getenv("GROQ_API_KEY"):
+        if os.getenv("GEMINI_API_KEY"):
+            return "gemini"
+        elif os.getenv("GROQ_API_KEY"):
             return "groq"
         elif os.getenv("OPENAI_API_KEY"):
             return "openai"
@@ -43,7 +46,14 @@ class LLMClient:
     
     def _init_client(self):
         """Initialize provider client."""
-        if self.provider == "groq":
+        if self.provider == "gemini":
+            try:
+                genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+                return genai.GenerativeModel('gemini-2.5-flash')
+            except ImportError:
+                print("[WARN] google-generativeai not installed, falling back to mock")
+                return None
+        elif self.provider == "groq":
             try:
                 from groq import Groq
                 return Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -82,7 +92,14 @@ class LLMClient:
             return self._mock_generate(prompt)
         
         try:
-            if self.provider == "groq":
+            if self.provider == "gemini":
+                response = self.client.generate_content(
+                    f"{system_prompt}\n\n{prompt}",
+                    generation_config={"max_output_tokens": max_tokens, "temperature": temperature}
+                )
+                return response.text
+            
+            elif self.provider == "groq":
                 response = self.client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[
