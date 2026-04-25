@@ -180,20 +180,24 @@ class ReasoningAgent:
     def _debugging_phase_action(self, state: ReproductionState) -> int:
         """Actions for debugging phase."""
         
+        total_debug_actions = len(state.debug.fix_attempts) + len(state.debug.solutions_tried)
+        
+        # Cap: after 3 debug attempts, give up and compare what we have
+        if total_debug_actions >= 3:
+            state.debug.current_error = ""  # clear to break loop
+            return self.action_space.get_id_by_action(ActionType.COMPARE_RESULTS)
+        
         if state.debug.current_error and not state.debug.last_hypothesis:
             return self.action_space.get_id_by_action(ActionType.ANALYZE_ERROR)
         
         elif state.debug.last_hypothesis and len(state.debug.fix_attempts) == 0:
-            return self.action_space.get_id_by_action(ActionType.SEARCH_SOLUTION)
-        
-        elif state.debug.current_error and len(state.debug.solutions_tried) < 3:
             return self.action_space.get_id_by_action(ActionType.APPLY_FIX)
         
         elif state.debug.current_error:
             return self.action_space.get_id_by_action(ActionType.APPLY_FIX)
         
         else:
-            # Error resolved — back to training
+            # Error resolved — back to execution
             return self.action_space.get_id_by_action(ActionType.RUN_TRAINING)
     
     def _experimentation_action(self, state: ReproductionState) -> int:
