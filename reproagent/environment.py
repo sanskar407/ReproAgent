@@ -464,29 +464,41 @@ class ReproAgentEnv(gym.Env):
             self.state.execution.logs.append("[OK] Parsing validated")
     
     def _action_clone_repo(self):
-        """Simulate repository cloning."""
+        """Clone the repository."""
         if self.state.paper.github_links and not self.state.repo.cloned:
             url = self.state.paper.github_links[0] if isinstance(self.state.paper.github_links, list) else self.state.paper.github_links
             self.state.repo.url = url
             
             if self.exec_mode == "Real Execution":
-                import subprocess, os, shutil
-                target_dir = os.path.join(self.workspace_dir, "repo")
+                import subprocess, os, shutil, re as _re
+                
+                # Extract repo name from URL for unique folder naming
+                repo_name = url.rstrip('/').split('/')[-1].replace('.git', '')
+                if not repo_name:
+                    repo_name = "repo"
+                target_dir = os.path.join(self.workspace_dir, repo_name)
+                
                 if os.path.exists(target_dir):
                     shutil.rmtree(target_dir)  # clean slate
                 
                 os.makedirs(self.workspace_dir, exist_ok=True)
-                self.state.execution.logs.append(f"[EXEC] Running git clone {url} {target_dir}")
+                self.state.execution.logs.append(f"[EXEC] Cloning {url} into {target_dir}")
                 
                 try:
-                    res = subprocess.run(["git", "clone", url, target_dir], capture_output=True, text=True, timeout=120)
+                    # Use --depth 1 for faster cloning
+                    res = subprocess.run(
+                        ["git", "clone", "--depth", "1", url, target_dir],
+                        capture_output=True, text=True, timeout=300
+                    )
                     if res.returncode == 0:
                         self.state.repo.cloned = True
                         self.state.repo.local_path = target_dir
                         self.state.repo.framework = "pytorch"  # default assumption
-                        self.state.execution.logs.append(f"[OK] Repository successfully cloned to {target_dir}")
+                        self.state.execution.logs.append(f"[OK] Repository cloned to {target_dir}")
                     else:
-                        self.state.execution.logs.append(f"[ERROR] Clone failed: {res.stderr}")
+                        self.state.execution.logs.append(f"[ERROR] Clone failed: {res.stderr[:300]}")
+                except subprocess.TimeoutExpired:
+                    self.state.execution.logs.append(f"[ERROR] Clone timed out after 300s. Repo may be too large.")
                 except Exception as e:
                     self.state.execution.logs.append(f"[ERROR] Exception during clone: {e}")
             else:
@@ -532,61 +544,65 @@ class ReproAgentEnv(gym.Env):
             self.state.execution.logs.append("[OK] Code structure analyzed")
     
     def _action_find_entry_point(self):
-        """Simulate finding entry point."""
+        """Find the entry point by reading README instructions first, then scanning files."""
         if self.state.repo.cloned and not self.state.repo.entry_point:
             if self.exec_mode == "Real Execution":
                 import os, re
                 lp = self.state.repo.local_path
                 ep = ""
-                if os.path.exists(os.path.join(lp, "inference.py")):
-                    ep = "inference.py"
-                elif os.path.exists(os.path.join(lp, "eval.py")):
-                    ep = "eval.py"
-                elif os.path.exists(os.path.join(lp, "test.py")):
-                    ep = "test.py"
-                elif os.path.exists(os.path.join(lp, "main.py")):
-                    ep = "main.py"
-                elif os.path.exists(os.path.join(lp, "train.py")):
-                    ep = "train.py"
+                readme_scripts = []  # Store ALL scripts found in README
                 
-                # If neither found, extract from README
-                if not ep and self.state.repo.readme_content:
-                    # 1. Try to find python executions inside bash scripts
-                    bash_blocks = re.findall(r"```(?:bash|sh)\n(.*?)\n```", self.state.repo.readme_content, re.DOTALL)
+                # === STEP 1: Always check README FIRST for instructions ===
+                if self.state.repo.readme_content:
+                    # 1a. Find python commands inside bash/sh blocks
+                    bash_blocks = re.findall(r"```(?:bash|sh|shell|console)?\n(.*?)\n```", self.state.repo.readme_content, re.DOTALL)
                     for block in bash_blocks:
-                        lines = block.split('\n')
+                        lines = block.strip().split('\n')
                         for line in lines:
-                            if line.strip().startswith("python "):
-                                parts = line.strip().split()
+                            stripped = line.strip()
+                            if stripped.startswith("python ") or stripped.startswith("python3 "):
+                                parts = stripped.split()
                                 if len(parts) >= 2 and parts[1].endswith(".py"):
-                                    extracted_py = parts[1]
-                                    if extracted_py.startswith("./"):
-                                        extracted_py = extracted_py[2:]
-                                    ep = extracted_py
-                                    self.state.execution.logs.append(f"[OK] Extracted script '{ep}' from bash block")
-                                    break
-                        if ep:
-                            break
+                                    script = parts[1]
+                                    if script.startswith("./"):
+                                        script = script[2:]
+                                    readme_scripts.append(script)
                     
-                    # 2. Try to find raw python blocks
-                    if not ep:
-                        python_blocks = re.findall(r"```python\n(.*?)\n```", self.state.repo.readme_content, re.DOTALL)
-                        if python_blocks:
-                            # Combine blocks or just take the longest one. We'll take the longest one for safety.
-                            longest_block = max(python_blocks, key=len)
-                            
-                            script_path = os.path.join(lp, "readme_script.py")
-                            with open(script_path, "w", encoding="utf-8") as f:
-                                f.write(longest_block)
-                                
-                            ep = "readme_script.py"
-                            self.state.execution.logs.append("[OK] Extracted Python script from README")
+                    # 1b. Also find inline python commands outside code blocks
+                    inline_matches = re.findall(r"(?:^|\n)\s*(?:python|python3)\s+(\S+\.py)", self.state.repo.readme_content)
+                    readme_scripts.extend(inline_matches)
+                
+                # Store all found scripts for potential sequential execution
+                if readme_scripts:
+                    # Store the full list so RUN_TRAINING can iterate
+                    self.state.repo.setup_instructions = readme_scripts
+                    ep = readme_scripts[0]  # Start with first script
+                    self.state.execution.logs.append(f"[OK] Found {len(readme_scripts)} script(s) in README: {readme_scripts}")
+                
+                # === STEP 2: Only if README had no scripts, scan files ===
+                if not ep:
+                    for candidate in ["inference.py", "eval.py", "test.py", "main.py", "run.py"]:
+                        if os.path.exists(os.path.join(lp, candidate)):
+                            ep = candidate
+                            self.state.execution.logs.append(f"[OK] Found script: {ep}")
+                            break
+                
+                # === STEP 3: Try python code blocks in README ===
+                if not ep and self.state.repo.readme_content:
+                    python_blocks = re.findall(r"```python\n(.*?)\n```", self.state.repo.readme_content, re.DOTALL)
+                    if python_blocks:
+                        longest_block = max(python_blocks, key=len)
+                        script_path = os.path.join(lp, "readme_script.py")
+                        with open(script_path, "w", encoding="utf-8") as f:
+                            f.write(longest_block)
+                        ep = "readme_script.py"
+                        self.state.execution.logs.append("[OK] Extracted Python script from README code block")
                 
                 if not ep:
-                    ep = "train.py" # fallback that will fail later
+                    self.state.execution.logs.append("[WARN] No entry point found in README or repo files")
+                    ep = "__no_entry_point__"  # marker so we don't loop forever
                     
                 self.state.repo.entry_point = ep
-                self.state.execution.logs.append(f"[OK] Assumed entry point: {ep}")
             else:
                 self.state.repo.entry_point = "train.py"
                 self.state.execution.logs.append("[OK] Entry point found: train.py")
@@ -632,13 +648,29 @@ class ReproAgentEnv(gym.Env):
                 target = env_yml if os.path.exists(env_yml) else env_yaml
                 self.state.execution.logs.append(f"[EXEC] Creating Conda env from {os.path.basename(target)}...")
                 try:
-                    res = subprocess.run(["conda", "env", "create", "--prefix", conda_dir, "-f", target], capture_output=True, text=True)
+                    res = subprocess.run(["conda", "env", "create", "--prefix", conda_dir, "-f", target], capture_output=True, text=True, timeout=600)
                     if res.returncode == 0:
                         self.state.execution.logs.append("[OK] Conda environment created successfully")
                     else:
-                        self.state.execution.logs.append(f"[ERROR] Failed to create conda env: {res.stderr[:200]}")
+                        self.state.execution.logs.append(f"[WARN] Conda env failed: {res.stderr[:200]}")
+                        # Fallback to venv if conda fails
+                        self.state.execution.logs.append("[EXEC] Falling back to python venv...")
+                        try:
+                            res2 = subprocess.run(["python", "-m", "venv", venv_dir], capture_output=True, text=True)
+                            if res2.returncode == 0:
+                                self.state.execution.logs.append("[OK] Fallback venv created")
+                            else:
+                                self.state.execution.logs.append(f"[ERROR] Fallback venv also failed: {res2.stderr}")
+                        except Exception as e2:
+                            self.state.execution.logs.append(f"[ERROR] Fallback venv exception: {e2}")
                 except Exception as e:
                     self.state.execution.logs.append(f"[ERROR] Exception creating conda env: {e}")
+                    # Also fallback on exception
+                    try:
+                        subprocess.run(["python", "-m", "venv", venv_dir], capture_output=True, text=True)
+                        self.state.execution.logs.append("[OK] Fallback venv created after conda exception")
+                    except:
+                        pass
             else:
                 self.state.execution.logs.append("[EXEC] Creating python venv...")
                 try:
@@ -653,51 +685,68 @@ class ReproAgentEnv(gym.Env):
             self.state.execution.logs.append("[OK] Virtual environment created")
     
     def _action_install_requirements(self):
-        """Simulate package installation."""
-        # For real execution, even if there are no dependencies in the list, we might want to install basics
+        """Install packages from requirements.txt, setup.py, or pyproject.toml."""
         if not self.state.environment.setup_complete:
             if self.exec_mode == "Real Execution":
                 import os, subprocess
                 
-                conda_dir = os.path.join(self.state.repo.local_path, "conda_env")
-                venv_dir = os.path.join(self.state.repo.local_path, "venv")
+                lp = self.state.repo.local_path
+                conda_dir = os.path.join(lp, "conda_env")
+                venv_dir = os.path.join(lp, "venv")
                 
-                # Make sure the env exists!
+                # Make sure the env exists
                 if not os.path.exists(conda_dir) and not os.path.exists(venv_dir):
                     self._action_create_venv()
                 
                 if os.path.exists(conda_dir):
                     self.state.environment.setup_complete = True
-                    self.state.execution.logs.append("[WARN] Conda env resolves dependencies implicitly. Marking setup complete.")
+                    self.state.execution.logs.append("[OK] Conda env handles deps. Setup complete.")
                     return
                 
-                venv_pip = os.path.join(self.state.repo.local_path, "venv", "Scripts", "pip")
+                venv_pip = os.path.join(lp, "venv", "Scripts", "pip")
                 if not os.path.exists(venv_pip):
-                    venv_pip = os.path.join(self.state.repo.local_path, "venv", "bin", "pip") # unix fallback
+                    venv_pip = os.path.join(lp, "venv", "bin", "pip")
                 
-                req_path = os.path.join(self.state.repo.local_path, "requirements.txt")
+                req_path = os.path.join(lp, "requirements.txt")
+                setup_path = os.path.join(lp, "setup.py")
+                pyproject_path = os.path.join(lp, "pyproject.toml")
                 
                 if os.path.exists(req_path):
-                    self.state.execution.logs.append("[EXEC] Installing requirements via pip...")
+                    self.state.execution.logs.append("[EXEC] pip install -r requirements.txt...")
                     try:
                         res = subprocess.run([venv_pip, "install", "-r", req_path], capture_output=True, text=True, timeout=300)
                         if res.returncode == 0:
                             self.state.environment.packages_installed = self.state.repo.dependencies.copy()
-                            self.state.environment.setup_complete = True
-                            self.state.execution.logs.append(f"[OK] Installed requirements from requirements.txt")
+                            self.state.execution.logs.append("[OK] Requirements installed")
                         else:
-                            self.state.execution.logs.append(f"[ERROR] Pip install failed. Check logs.")
+                            self.state.execution.logs.append(f"[WARN] pip install had issues: {res.stderr[:200]}")
                     except Exception as e:
-                        self.state.execution.logs.append(f"[ERROR] Exception during pip install: {e}")
+                        self.state.execution.logs.append(f"[ERROR] pip install exception: {e}")
+                    self.state.environment.setup_complete = True
+                elif os.path.exists(setup_path):
+                    self.state.execution.logs.append("[EXEC] pip install -e . (setup.py)...")
+                    try:
+                        subprocess.run([venv_pip, "install", "-e", "."], capture_output=True, text=True, timeout=300, cwd=lp)
+                        self.state.execution.logs.append("[OK] Package installed via setup.py")
+                    except Exception as e:
+                        self.state.execution.logs.append(f"[ERROR] setup.py install exception: {e}")
+                    self.state.environment.setup_complete = True
+                elif os.path.exists(pyproject_path):
+                    self.state.execution.logs.append("[EXEC] pip install -e . (pyproject.toml)...")
+                    try:
+                        subprocess.run([venv_pip, "install", "-e", "."], capture_output=True, text=True, timeout=300, cwd=lp)
+                        self.state.execution.logs.append("[OK] Package installed via pyproject.toml")
+                    except Exception as e:
+                        self.state.execution.logs.append(f"[ERROR] pyproject.toml install exception: {e}")
+                    self.state.environment.setup_complete = True
                 else:
                     self.state.environment.setup_complete = True
-                    self.state.execution.logs.append("[WARN] No requirements to install, marking complete")
+                    self.state.execution.logs.append("[OK] No requirements/setup files found. Using env as-is.")
             else:
                 if self.state.repo.dependencies:
                     self.state.environment.packages_installed = self.state.repo.dependencies.copy()
                 self.state.environment.setup_complete = True
-                self.state.execution.logs.append(f"[OK] Installed defined packages")
-    
+                self.state.execution.logs.append("[OK] Installed packages")
     def _action_download_data(self):
         """Simulate dataset download."""
         self.state.execution.logs.append(f"[OK] Dataset '{self.state.paper.dataset}' downloaded")
