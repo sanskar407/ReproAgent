@@ -3,10 +3,8 @@ title: ReproAgent
 emoji: 🔬
 colorFrom: blue
 colorTo: indigo
-sdk: gradio
-sdk_version: 5.9.1
-python_version: "3.12"
-app_file: server/app.py
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 

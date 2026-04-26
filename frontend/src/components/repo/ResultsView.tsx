@@ -60,10 +60,8 @@ export const ResultsView = ({ results, mode, onRunAgain }: ResultsViewProps) => 
   const handleDownloadPPT = () => {
     if (results?.ppt_url) {
       const a = document.createElement("a");
-      // If the URL is relative, prepend the backend host
-      a.href = results.ppt_url.startsWith("http") 
-        ? results.ppt_url 
-        : `http://localhost:7860${results.ppt_url.startsWith("/") ? "" : "/"}${results.ppt_url}`;
+      // Use relative URL — works in both local dev and HF Spaces
+      a.href = results.ppt_url;
       a.download = "Research_Presentation.pptx";
       a.click();
     }

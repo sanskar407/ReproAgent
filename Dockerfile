@@ -43,5 +43,5 @@ EXPOSE 7860
 ENV HOST="0.0.0.0"
 ENV PORT=7860
 
-# Run FastAPI app
-CMD ["python", "server/api.py"]
+# Run FastAPI app (serves React frontend + API)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
