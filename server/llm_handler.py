@@ -25,7 +25,7 @@ def _call_gemini(prompt: str) -> str:
         # Fallback to old SDK if new one not available
         import google.generativeai as genai_old
         genai_old.configure(api_key=api_key)
-        model = genai_old.GenerativeModel("gemini-1.5-flash")
+        model = genai_old.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
         return response.text
 
