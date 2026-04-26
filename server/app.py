@@ -294,16 +294,12 @@ def run_paper_reproduction(
     target_metric = 0.0
     metric_name = "Unknown"
     if metrics:
-        metric_name = metrics[0].get("name", "accuracy")
+        metric_name = metrics[0].get("name", "Unknown")
         try:
             val = float(metrics[0].get("value", "0.0"))
             target_metric = val
         except (ValueError, TypeError):
-            target_metric = 0.95
-    else:
-        # Fallback if neither regex nor LLM generated any metrics
-        target_metric = 0.95
-        metric_name = "accuracy"
+            pass
 
     # Build paper info markdown
     paper_info_md = f"""## Paper Information
