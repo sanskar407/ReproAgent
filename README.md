@@ -36,11 +36,12 @@ pinned: false
 This project is submitted to the **OpenEnv Hackathon**. It is a fully compliant environment built on top of the framework.
 
 ### Required Materials
-- **Hugging Face Space**: [ReproAgent Live Demo](https://huggingface.co/spaces/username/reproagent)
-- **Training Script (TRL/PPO)**: [Colab Notebook](training/train_reproagent.ipynb)
-- **Evidence of Training**: We trained the agent using Proximal Policy Optimization (PPO) over 50 episodes. 
+- **Hugging Face Space**: [ReproAgent Live Demo](https://huggingface.co/spaces/Yusufarsh/ReproAgent)
+- **Training Script (SB3/PPO)**: [Colab Notebook](training/ReproAgent_Training_SB3.ipynb)
+- **Evidence of Training**: Trained using Stable-Baselines3 PPO over 5,000 steps. Mean episode reward reached **542** on the Easy difficulty.
   <br><img src="assets/reward_plot.png" alt="Reward Plot" width="400"/> <img src="assets/loss_plot.png" alt="Loss Plot" width="400"/>
-- **Presentation**: [Mini-Blog on HuggingFace](https://huggingface.co/blog/reproagent-openenv) / [YouTube Demo (< 2 minutes)](https://youtube.com/watch?v=demo_link)
+  > Reward increases from ~-5 (untrained baseline) to ~+542 (trained agent). Loss stabilizes confirming convergence.
+- **Presentation**: [Mini-Blog on HuggingFace](https://huggingface.co/blog/reproagent-openenv)
 
 ---
 
@@ -81,14 +82,16 @@ It supports both a **Simulation** mode (safe, no system changes) and a **Real Ex
 
 | Feature | Description |
 |---------|-------------|
-| 📄 **PDF Parsing** | Extracts metadata using Groq LLM (llama-3.3-70b) with regex fallback |
+| 📄 **PDF Parsing** | Extracts metadata using Gemini AI (gemini-2.0-flash) with regex fallback |
 | 🔗 **Repo Discovery** | Finds GitHub links from paper text, cleans trailing punctuation |
-| 📦 **Smart Environment Setup** | Auto-detects `requirements.txt`, `environment.yml`, or `pyproject.toml` and creates the correct env (pip venv or conda) |
+| 📦 **Smart Environment Setup** | Auto-detects `requirements.txt`, `environment.yml`, or `pyproject.toml` and creates the correct env |
 | 🧠 **Intelligent Entry Point** | Scans for `inference.py`, `eval.py`, `main.py`, `train.py`, or extracts scripts from README bash blocks |
 | 🐛 **Real Error Debugging** | Captures actual `stderr` tracebacks and feeds them into the debugging pipeline |
 | 🧪 **Hyperparameter Tuning** | Modifies learning rate, batch size, optimizer, and epochs to reproduce paper metrics |
 | 📊 **Dynamic Metric Extraction** | Extracts the actual evaluation metric (FID, BLEU, accuracy, PSNR, etc.) from the paper — not hardcoded |
-| 🖥️ **Gradio Web UI** | Beautiful web interface with live logs, state tracking, and result visualization |
+| 🎨 **React Frontend** | Premium React + Vite UI with animated pipeline view, live logs, and results dashboard |
+| 🤖 **Easy Mode** | Upload PDF → Gemini generates a structured summary + downloadable PowerPoint presentation |
+| 📈 **RL Training** | PPO agent trained with Stable-Baselines3, achieving 542 mean reward on Easy difficulty |
 
 ---
 
@@ -96,43 +99,35 @@ It supports both a **Simulation** mode (safe, no system changes) and a **Real Ex
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Gradio Web UI                            │
-│                      (server/app.py)                            │
+│               React Frontend (Vite + TypeScript)                 │
+│         Served by FastAPI static files (main.py)                 │
 └──────────────────────────┬──────────────────────────────────────┘
-                           │
+                           │ fetch("/api/easy-mode")
+                           │ fetch("/api/reproduce")
               ┌────────────▼────────────┐
-              │    Reasoning Agent      │
-              │ (agents/reasoning_      │
-              │  agent.py)              │
+              │   FastAPI Backend        │
+              │     (main.py)           │
               └────────────┬────────────┘
-                           │ select_action()
-              ┌────────────▼────────────┐
-              │   Gymnasium Environment │
-              │ (reproagent/            │
-              │  environment.py)        │
-              │                         │
-              │  ┌─────────────────┐    │
-              │  │  State Machine  │    │
-              │  │  ┌───────────┐  │    │
-              │  │  │ Parsing   │  │    │
-              │  │  │ RepoAnalys│  │    │
-              │  │  │ Setup     │  │    │
-              │  │  │ Execution │  │    │
-              │  │  │ Debugging │  │    │
-              │  │  │ Experiment│  │    │
-              │  │  │ Comparison│  │    │
-              │  │  └───────────┘  │    │
-              │  └─────────────────┘    │
-              └─────────────────────────┘
-                     │           │
-          ┌──────────┘           └──────────┐
-          ▼                                 ▼
-  ┌───────────────┐                ┌────────────────┐
-  │  Simulation   │                │ Real Execution │
-  │  (mock state  │                │ (subprocess,   │
-  │   transitions)│                │  git clone,    │
-  │               │                │  conda/venv)   │
-  └───────────────┘                └────────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+  ┌──────────────┐ ┌─────────────┐ ┌──────────────────┐
+  │ llm_handler  │ │pdf_processor│ │  ppt_generator   │
+  │ (google.genai│ │  (PyMuPDF)  │ │  (python-pptx)   │
+  │  Gemini API) │ │             │ │                  │
+  └──────────────┘ └─────────────┘ └──────────────────┘
+          │
+          ▼
+  ┌───────────────────────┐
+  │   Gymnasium Env       │
+  │ (reproagent/          │
+  │  environment.py)      │
+  │                       │
+  │  ┌─────────────────┐  │
+  │  │  State Machine  │  │
+  │  │  7 Phases       │  │
+  │  └─────────────────┘  │
+  └───────────────────────┘
 ```
 
 ---
@@ -141,16 +136,17 @@ It supports both a **Simulation** mode (safe, no system changes) and a **Real Ex
 
 ### Prerequisites
 
-- **Python** 3.10+
-- **Git** (for real execution mode)
-- **Conda** (optional, for repos that use `environment.yml`)
-- A **Groq API key** (free at [console.groq.com](https://console.groq.com))
+- **Python** 3.12+
+- **Node.js** 18+ (for building the React frontend)
+- **Git**
+- A **Gemini API key** (free at [aistudio.google.com](https://aistudio.google.com))
+- A **Groq API key** (free at [console.groq.com](https://console.groq.com)) — for Medium/Advanced mode
 
 ### Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/ReproAgent.git
+git clone https://github.com/sanskar407/ReproAgent.git
 cd ReproAgent
 
 # 2. Create a virtual environment
@@ -162,22 +158,28 @@ python -m venv venv
 # macOS/Linux
 source venv/bin/activate
 
-# 3. Install dependencies
+# 3. Install Python dependencies
 pip install -r requirements.txt
 
-# 4. Set up environment variables
-cp .env.example .env
-# Edit .env and add your GROQ_API_KEY
+# 4. Build the React frontend
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 5. Set up environment variables
+copy .env.example .env
+# Edit .env and add your GEMINI_API_KEY and GROQ_API_KEY
 ```
 
 ### Run
 
 ```bash
-# Launch the Gradio web interface
-python server/app.py
+# Launch the FastAPI server (serves React UI + API)
+python main.py
 ```
 
-The UI will be available at `http://localhost:7860` with a public share link.
+The UI will be available at `http://localhost:7860`.
 
 ---
 
@@ -185,13 +187,12 @@ The UI will be available at `http://localhost:7860` with a public share link.
 
 ### Web Interface (Recommended)
 
-1. Open the Gradio UI at `http://localhost:7860`
-2. **Upload** a research paper PDF (or paste a URL)
-3. Choose **Execution Mode**:
-   - `Simulation` — Safe demo, no system changes
-   - `Real Execution` — Actually clones repos and runs code
-4. Set **Clone Directory** (where repos will be cloned, e.g. `D:\reproductions`)
-5. Click **Start Reproduction** and watch the agent work in real-time
+1. Open the React UI at `http://localhost:7860`
+2. **Easy Mode**: Upload a PDF → Gemini generates a structured summary + downloadable PPT
+3. **Medium / Advanced Mode**:
+   - Upload a research paper PDF (or paste a URL)
+   - Choose **Execution Mode**: `Simulation` (safe) or `Real Execution` (clones repo)
+   - Click **Start Reproduction** and watch the live agent pipeline
 
 ### Command Line
 
@@ -242,7 +243,6 @@ for step in range(100):
 ```
 ReproAgent/
 ├── reproagent/                  # Core Gymnasium environment
-│   ├── __init__.py
 │   ├── environment.py           # Main env with action implementations
 │   ├── state.py                 # Dataclasses for full reproduction state
 │   ├── actions.py               # Action space definition (30+ actions)
@@ -257,24 +257,33 @@ ReproAgent/
 │   └── debugger.py              # Error traceback analysis
 │
 ├── server/
-│   └── app.py                   # Gradio web interface (900+ lines)
+│   ├── app.py                   # Gradio interface (for local use)
+│   ├── llm_handler.py           # Gemini API handler (google.genai SDK)
+│   ├── pdf_processor.py         # PyMuPDF-based PDF extraction
+│   └── ppt_generator.py         # Premium dark-themed PPT generator
 │
+├── frontend/                    # React + Vite + TypeScript UI
+│   ├── src/
+│   │   ├── pages/Index.tsx      # Main app page
+│   │   ├── components/repo/     # ProcessingView, ResultsView, LandingForm
+│   │   └── App.tsx              # Router setup
+│   └── package.json
+│
+├── training/
+│   ├── train_reproagent_sb3.py  # Stable-Baselines3 PPO training script
+│   └── ReproAgent_Training_SB3.ipynb  # Colab-ready notebook
+│
+├── main.py                      # FastAPI entry point (serves React + API)
 ├── utils/
-│   ├── pdf_reader.py            # PDF extraction (PyPDF2 + pdfplumber)
+│   ├── pdf_reader.py            # PDF extraction utilities
 │   └── github_utils.py          # GitHub API utilities
 │
-├── graders/                     # Reproduction quality grading
 ├── data/papers/                 # Sample paper configs (easy/medium/hard)
-├── baseline/                    # Baseline agent implementations
-├── static/                      # Static assets for UI
-│
+├── assets/                      # Training plots and banners
 ├── validate.py                  # Full validation suite
-├── inference.py                 # CLI inference entry point
 ├── openenv.yaml                 # OpenEnv compatibility spec
-├── pyproject.toml               # Python project metadata
 ├── requirements.txt             # pip dependencies
-├── Dockerfile                   # Container deployment
-├── run.bat / run.sh / run.ps1   # Platform-specific launchers
+├── Dockerfile                   # Docker deployment (builds React + runs FastAPI)
 └── .env.example                 # Environment variable template
 ```
 
@@ -292,7 +301,8 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GROQ_API_KEY` | **Yes** | Groq API key for LLM-powered extraction ([get one free](https://console.groq.com)) |
+| `GEMINI_API_KEY` | **Yes** | Gemini API key for Easy Mode (summary + PPT) ([get one free](https://aistudio.google.com)) |
+| `GROQ_API_KEY` | **Yes** | Groq API key for Medium/Advanced Mode LLM ([get one free](https://console.groq.com)) |
 | `OPENAI_API_KEY` | No | OpenAI API key (alternative LLM backend) |
 | `HF_TOKEN` | No | HuggingFace token for model downloads |
 | `GITHUB_TOKEN` | No | GitHub API token for higher rate limits |
@@ -376,34 +386,42 @@ OPENENV_YAML         ✅ PASSED
 ## 🐳 Docker Deployment
 
 ```bash
-# Build the image
+# Build the Docker image
 docker build -t reproagent .
 
-# Run with your API key
-docker run -p 7860:7860 -e GROQ_API_KEY=your_key_here reproagent
+# Run with your API keys
+docker run -p 7860:7860 \
+  -e GEMINI_API_KEY=your_gemini_key \
+  -e GROQ_API_KEY=your_groq_key \
+  reproagent
 ```
 
-Or deploy to **HuggingFace Spaces**:
+Or deploy to **HuggingFace Spaces** (Docker SDK):
 
 ```bash
-pip install gradio
-gradio deploy
+git remote add space https://YOUR_TOKEN@huggingface.co/spaces/YOUR_USERNAME/ReproAgent
+git push space main --force
 ```
+
+> **Note**: Add `GEMINI_API_KEY` and `GROQ_API_KEY` in your Space **Settings > Variables and Secrets**.
 
 ---
 
 ## 🛣️ Roadmap
 
 - [x] Gymnasium-compatible environment with 30+ actions
-- [x] Groq LLM integration with regex fallback
-- [x] Gradio web interface with live logs
+- [x] Groq LLM integration for Medium/Advanced mode
+- [x] React + Vite premium frontend with animated UI
+- [x] FastAPI backend serving React and API endpoints
+- [x] Easy Mode: Gemini AI summary + downloadable PowerPoint
+- [x] Docker deployment on Hugging Face Spaces
+- [x] RL Training with Stable-Baselines3 PPO (542 mean reward)
+- [x] Colab training notebook (ReproAgent_Training_SB3.ipynb)
 - [x] Real Execution mode (git clone, conda/venv, subprocess)
 - [x] Dynamic metric extraction (FID, BLEU, accuracy, PSNR, etc.)
-- [x] Bash block parsing from README for entry point discovery
-- [ ] Multi-script sequential execution (run 5 scripts in order per README)
+- [ ] Multi-script sequential execution
 - [ ] Automatic checkpoint downloading from HuggingFace
 - [ ] GPU-aware execution scheduling
-- [ ] Result visualization and plot generation
 - [ ] Support for Jupyter notebook-based repos
 
 ---
