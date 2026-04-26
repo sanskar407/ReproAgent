@@ -70,7 +70,17 @@ async def easy_mode(file: UploadFile = File(...)):
 
         # 2. Call Gemini
         result = generate_summary_and_ppt_content(text)
-        description = result.get("description", "No description generated.")
+        
+        # If the LLM handler returned an error description, let's notify the user
+        description = result.get("description", "")
+        if "Please check your GEMINI_API_KEY" in description:
+            # Check if slides contain more info
+            error_msg = description
+            if result.get("slides") and len(result["slides"]) > 0:
+                error_detail = result["slides"][0].get("content", [""])[0]
+                error_msg += f" (Detail: {error_detail})"
+            raise HTTPException(status_code=500, detail=error_msg)
+
         slides = result.get("slides", [])
 
         # 3. Generate PPT

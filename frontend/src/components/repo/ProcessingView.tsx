@@ -96,8 +96,15 @@ export const ProcessingView = ({ mode, onComplete, payload }: ProcessingViewProp
           });
 
           if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || "API request failed.");
+            let errorDetail = "API request failed.";
+            try {
+              const err = await response.json();
+              errorDetail = err.detail || errorDetail;
+            } catch (e) {
+              // Not a JSON response
+              errorDetail = `Server error (${response.status}): ${response.statusText}`;
+            }
+            throw new Error(errorDetail);
           }
 
           const data = await response.json();
