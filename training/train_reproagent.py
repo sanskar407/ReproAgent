@@ -19,6 +19,7 @@ from reproagent.actions import ActionSpace
 try:
     from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
     from transformers import AutoTokenizer
+    from datasets import Dataset
 except ImportError:
     print("Please install trl and transformers: pip install trl transformers")
     sys.exit(1)
@@ -26,10 +27,10 @@ except ImportError:
 def format_observation(obs):
     """Format the observation dict into a text prompt for the LLM."""
     return f"""Current state:
-Paper Target: {obs['paper_features'][0]:.3f}
+Paper Target: {obs['paper_features'][2]:.3f}
 Current Metric: {obs['experiment_features'][0]:.3f}
-Gap: {obs['experiment_features'][1]:.3f}
-Phase: {obs['meta_features'][0]}
+Gap: {obs['experiment_features'][3]:.3f}
+Phase index: {obs['meta_features'][1]}
 Action options: [0-34]
 Select action ID:"""
 
@@ -51,11 +52,14 @@ def train():
     tokenizer.pad_token = tokenizer.eos_token
 
     # 3. Initialize PPO Trainer
+    # Note: Modern TRL (0.12+) requires a dataset positional argument
+    dummy_dataset = Dataset.from_dict({"query": ["dummy"], "input_ids": [[0]]})
+    
     ppo_trainer = PPOTrainer(
         config=config,
         model=model,
         tokenizer=tokenizer,
-        ref_model=None,
+        dataset=dummy_dataset,
     )
 
     # 4. Initialize Environment
