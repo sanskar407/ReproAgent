@@ -579,11 +579,15 @@ class ReproAgentEnv(gym.Env):
                     ep = readme_scripts[0]  # Start with first script
                     self.state.execution.logs.append(f"[OK] Found {len(readme_scripts)} script(s) in README: {readme_scripts}")
                 
-                # === STEP 2: Only if README had no scripts, scan files ===
+                # === STEP 2: Only if README had no scripts, scan files recursively ===
                 if not ep:
-                    for candidate in ["inference.py", "eval.py", "test.py", "main.py", "run.py"]:
-                        if os.path.exists(os.path.join(lp, candidate)):
-                            ep = candidate
+                    from pathlib import Path
+                    for candidate in ["inference.py", "eval.py", "test.py", "main.py", "run.py", "train.py"]:
+                        matches = list(Path(lp).rglob(candidate))
+                        if matches:
+                            # Use the shallowest one found
+                            matches.sort(key=lambda x: len(x.parts))
+                            ep = str(matches[0].relative_to(lp)).replace('\\', '/')
                             self.state.execution.logs.append(f"[OK] Found script: {ep}")
                             break
                 
@@ -612,17 +616,22 @@ class ReproAgentEnv(gym.Env):
         if self.state.repo.cloned and not self.state.repo.dependencies:
             if self.exec_mode == "Real Execution":
                 import os
-                req_path = os.path.join(self.state.repo.local_path, "requirements.txt")
-                env_yml = os.path.join(self.state.repo.local_path, "environment.yml")
-                env_yaml = os.path.join(self.state.repo.local_path, "environment.yaml")
+                from pathlib import Path
+                lp = self.state.repo.local_path
                 
-                if os.path.exists(env_yml) or os.path.exists(env_yaml):
-                    target = env_yml if os.path.exists(env_yml) else env_yaml
-                    with open(target, "r", encoding="utf-8") as f:
+                # Recursive search for requirement files
+                req_matches = list(Path(lp).rglob("requirements.txt"))
+                env_matches = list(Path(lp).rglob("environment.yml")) + list(Path(lp).rglob("environment.yaml"))
+                
+                req_path = str(req_matches[0]) if req_matches else None
+                env_yaml = str(env_matches[0]) if env_matches else None
+                
+                if env_yaml:
+                    with open(env_yaml, "r", encoding="utf-8") as f:
                         lines = [line for line in f if "- " in line]
                     self.state.repo.dependencies = lines
-                    self.state.execution.logs.append(f"[OK] Found Conda environment file with ~{len(lines)} dependencies")
-                elif os.path.exists(req_path):
+                    self.state.execution.logs.append(f"[OK] Found Conda env file with ~{len(lines)} dependencies")
+                elif req_path:
                     with open(req_path, "r", encoding="utf-8") as f:
                         deps = [line.strip() for line in f if line.strip() and not line.startswith("#")]
                     self.state.repo.dependencies = deps
@@ -638,14 +647,15 @@ class ReproAgentEnv(gym.Env):
         """Simulate virtual environment creation."""
         if self.exec_mode == "Real Execution":
             import os, subprocess
-            conda_dir = os.path.join(self.state.repo.local_path, "conda_env")
-            venv_dir = os.path.join(self.state.repo.local_path, "venv")
+            from pathlib import Path
+            lp = self.state.repo.local_path
+            conda_dir = os.path.join(lp, "conda_env")
+            venv_dir = os.path.join(lp, "venv")
             
-            env_yml = os.path.join(self.state.repo.local_path, "environment.yml")
-            env_yaml = os.path.join(self.state.repo.local_path, "environment.yaml")
+            env_matches = list(Path(lp).rglob("environment.yml")) + list(Path(lp).rglob("environment.yaml"))
+            target = str(env_matches[0]) if env_matches else None
             
-            if os.path.exists(env_yml) or os.path.exists(env_yaml):
-                target = env_yml if os.path.exists(env_yml) else env_yaml
+            if target:
                 self.state.execution.logs.append(f"[EXEC] Creating Conda env from {os.path.basename(target)}...")
                 try:
                     res = subprocess.run(["conda", "env", "create", "--prefix", conda_dir, "-f", target], capture_output=True, text=True, timeout=600)
@@ -707,14 +717,20 @@ class ReproAgentEnv(gym.Env):
                 if not os.path.exists(venv_pip):
                     venv_pip = os.path.join(lp, "venv", "bin", "pip")
                 
-                req_path = os.path.join(lp, "requirements.txt")
-                setup_path = os.path.join(lp, "setup.py")
-                pyproject_path = os.path.join(lp, "pyproject.toml")
+                from pathlib import Path
                 
-                if os.path.exists(req_path):
-                    self.state.execution.logs.append("[EXEC] pip install -r requirements.txt...")
+                req_matches = list(Path(lp).rglob("requirements.txt"))
+                setup_matches = list(Path(lp).rglob("setup.py"))
+                pyproject_matches = list(Path(lp).rglob("pyproject.toml"))
+                
+                req_path = str(req_matches[0]) if req_matches else None
+                setup_path = str(setup_matches[0]) if setup_matches else None
+                pyproject_path = str(pyproject_matches[0]) if pyproject_matches else None
+                
+                if req_path:
+                    self.state.execution.logs.append(f"[EXEC] pip install -r {os.path.basename(req_path)}...")
                     try:
-                        res = subprocess.run([venv_pip, "install", "-r", req_path], capture_output=True, text=True, timeout=300)
+                        res = subprocess.run([venv_pip, "install", "-r", req_path], capture_output=True, text=True, timeout=300, cwd=os.path.dirname(req_path))
                         if res.returncode == 0:
                             self.state.environment.packages_installed = self.state.repo.dependencies.copy()
                             self.state.execution.logs.append("[OK] Requirements installed")
@@ -723,15 +739,15 @@ class ReproAgentEnv(gym.Env):
                     except Exception as e:
                         self.state.execution.logs.append(f"[ERROR] pip install exception: {e}")
                     self.state.environment.setup_complete = True
-                elif os.path.exists(setup_path):
+                elif setup_path:
                     self.state.execution.logs.append("[EXEC] pip install -e . (setup.py)...")
                     try:
-                        subprocess.run([venv_pip, "install", "-e", "."], capture_output=True, text=True, timeout=300, cwd=lp)
+                        subprocess.run([venv_pip, "install", "-e", "."], capture_output=True, text=True, timeout=300, cwd=os.path.dirname(setup_path))
                         self.state.execution.logs.append("[OK] Package installed via setup.py")
                     except Exception as e:
                         self.state.execution.logs.append(f"[ERROR] setup.py install exception: {e}")
                     self.state.environment.setup_complete = True
-                elif os.path.exists(pyproject_path):
+                elif pyproject_path:
                     self.state.execution.logs.append("[EXEC] pip install -e . (pyproject.toml)...")
                     try:
                         subprocess.run([venv_pip, "install", "-e", "."], capture_output=True, text=True, timeout=300, cwd=lp)
@@ -815,20 +831,35 @@ class ReproAgentEnv(gym.Env):
                 # Resolve entry point (could be nested like mainldm/stable_cali.py)
                 entry_point = os.path.join(lp, self.state.repo.entry_point)
                 
+                # If the entry point extracted from README doesn't exist exactly, try to find it recursively
+                if not os.path.exists(entry_point):
+                    from pathlib import Path
+                    ep_name = os.path.basename(self.state.repo.entry_point)
+                    matches = list(Path(lp).rglob(ep_name))
+                    if matches:
+                        matches.sort(key=lambda x: len(x.parts))
+                        entry_point = str(matches[0])
+                        self.state.execution.logs.append(f"[INFO] Resolved entry point to {os.path.relpath(entry_point, lp)}")
+                
                 if os.path.exists(entry_point):
-                    self.state.execution.logs.append(f"[EXEC] Running {self.state.repo.entry_point}...")
+                    # To be safe, run it from the directory containing the entry point 
+                    # in case the user specified "python train.py" but it's in "code/"
+                    ep_dir = os.path.dirname(entry_point)
+                    script_name = os.path.basename(entry_point)
+                    
+                    self.state.execution.logs.append(f"[EXEC] Running {script_name} in {os.path.relpath(ep_dir, lp)}...")
                     try:
                         if use_conda_run:
-                            cmd = ["conda", "run", "--prefix", conda_dir, "--no-banner", "python", entry_point]
+                            cmd = ["conda", "run", "--prefix", conda_dir, "--no-banner", "python", script_name]
                         else:
-                            cmd = [python_exe, entry_point]
+                            cmd = [python_exe, script_name]
                         
                         res = subprocess.run(
                             cmd,
                             capture_output=True,
                             text=True,
                             timeout=600,
-                            cwd=lp
+                            cwd=ep_dir
                         )
                         
                         # Log stdout (truncated) so user can see output
@@ -991,6 +1022,7 @@ class ReproAgentEnv(gym.Env):
     
     def _action_generate_report(self):
         """Generate reproduction report."""
+        setattr(self.state.meta, 'report_generated', True)
         self.state.execution.logs.append("[REPORT] Reproduction report generated")
     
     def _action_form_hypothesis(self):
@@ -1055,6 +1087,19 @@ class ReproAgentEnv(gym.Env):
     
     def _check_success(self) -> bool:
         """Check if reproduction was successful."""
+        
+        if getattr(self.state.meta, 'report_generated', False):
+            if self.state.paper.target_metric > 0.0:
+                threshold = self.state.paper.target_metric * 0.95
+                if self.state.experiment.current_metric >= threshold:
+                    self.state.meta.success = True
+            else:
+                self.state.meta.success = not bool(self.state.execution.last_error)
+            return True
+            
+        if self.state.paper.target_metric <= 0.0 or self.state.experiment.current_metric <= 0.0:
+            return False
+            
         threshold = self.state.paper.target_metric * 0.95
         
         if self.state.experiment.current_metric >= threshold:
