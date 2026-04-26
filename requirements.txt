@@ -1,146 +1,38 @@
+# Core
 gymnasium
 numpy
 pandas
 
+# LLM APIs
 groq
 openai
 huggingface-hub
 google-generativeai
 
+# PDF Processing
 PyPDF2
 pdfplumber
+pymupdf
 
+# GitHub
 GitPython
 requests
 
-gradio-client
-hf-gradio
+# Demo (let HF Spaces manage gradio itself)
 gradio
 
+# Utilities
 python-pptx
 python-dotenv
 tqdm
+matplotlib
+pydub
 
+# API Serving
 fastapi
 uvicorn
 python-multipart
-pymupdf
 
-torch
-transformers
-trl
-datasets
-
-aiofile
-aiofiles
-annotated-doc
-annotated-types
-anyio
-attrs
-authlib
-backports-tarfile
-beartype
-brotli
-cachetools
-caio
-certifi
-cffi
-charset-normalizer
-click
-colorspacious
-contourpy
-cryptography
-cycler
-cyclopts
-distro
-dnspython
-docstring-parser
-docutils
-email-validator
-exceptiongroup
-fastmcp
-ffmpy
-filelock
-fonttools
-fsspec
-groovy
-h11
-hf-xet
-httpcore
-httpx
-httpx-sse
-idna
-imageio
-importlib-metadata
-iniconfig
-jaraco-classes
-jaraco-context
-jaraco-functools
-jeepney
-jinja2
-jiter
-jsonref
-jsonschema
-jsonschema-path
-jsonschema-specifications
-keyring
-kiwisolver
-lazy-loader
-markdown-it-py
-markupsafe
-matplotlib
-mcp
-mdurl
-more-itertools
-networkx
-openapi-pydantic
-openenv-core
-opentelemetry-api
-orjson
-pathable
-pillow
-platformdirs
-pluggy
-py-key-value-aio
-pycparser
-pydantic
-pydantic-core
-pydantic-settings
-pydub
-pygments
-pyjwt
-pyparsing
-pyperclip
-pytest
-python-dateutil
-pytz
-pyyaml
-referencing
-rich
-rich-rst
-rpds-py
-safehttpx
-scikit-image
-scipy
-secretstorage
-semantic-version
-shellingham
-six
-sniffio
-sse-starlette
-starlette
-tifffile
-tomli
-tomli-w
-tomlkit
-typer
-typing-extensions
-typing-inspection
-uncalled-for
-urllib3
-watchfiles
-websockets
-zipp
-
+# Training
 stable-baselines3
 shimmy
