@@ -183,24 +183,38 @@ class ReasoningAgent:
     def _debugging_phase_action(self, state: ReproductionState) -> int:
         """Actions for debugging phase."""
         
-        total_debug_actions = len(state.debug.fix_attempts) + len(state.debug.solutions_tried)
+        # Track per-error debug cycles using a persistent attribute
+        if not hasattr(self, '_last_debug_error'):
+            self._last_debug_error = ""
+            self._current_error_attempts = 0
         
-        # Cap: after 3 debug attempts, give up and compare what we have
-        if total_debug_actions >= 3:
-            state.debug.current_error = ""  # clear to break loop
+        # Detect if this is a NEW error (different from last one we tried to fix)
+        current_err_sig = state.debug.current_error.strip()[-100:] if state.debug.current_error else ""
+        if current_err_sig and current_err_sig != self._last_debug_error:
+            self._last_debug_error = current_err_sig
+            self._current_error_attempts = 0  # reset for new error
+        
+        # Cap: after 5 attempts on the SAME error, give up and compare
+        if self._current_error_attempts >= 5:
+            state.debug.current_error = ""
+            self._current_error_attempts = 0
             return self.action_space.get_id_by_action(ActionType.COMPARE_RESULTS)
         
         if state.debug.current_error and not state.debug.last_hypothesis:
+            self._current_error_attempts += 1
             return self.action_space.get_id_by_action(ActionType.ANALYZE_ERROR)
         
         elif state.debug.last_hypothesis and len(state.debug.fix_attempts) == 0:
+            self._current_error_attempts += 1
             return self.action_space.get_id_by_action(ActionType.APPLY_FIX)
         
         elif state.debug.current_error:
+            self._current_error_attempts += 1
             return self.action_space.get_id_by_action(ActionType.APPLY_FIX)
         
         else:
             # Error resolved — back to execution
+            self._current_error_attempts = 0
             return self.action_space.get_id_by_action(ActionType.RUN_TRAINING)
     
     def _experimentation_action(self, state: ReproductionState) -> int:

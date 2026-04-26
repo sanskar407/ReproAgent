@@ -113,8 +113,8 @@ class PaperParser:
         Returns:
             Extracted information dict
         """
-        # Truncate text to fit in context
-        text_sample = text[:5000]
+        # Truncate text to fit in context (Increase limit to read results section)
+        text_sample = text[:15000]
         
         prompt = f"""
 Extract the following information from this research paper:
@@ -123,7 +123,7 @@ Extract the following information from this research paper:
 2. **Abstract**: Paper abstract (if present)
 3. **Dataset**: Dataset used (e.g., "CIFAR-10", "ImageNet", "COCO")
 4. **Model**: Model architecture (e.g., "ResNet-50", "BERT", "GPT-2")
-5. **Target Metric**: Best reported performance value as a number. Extract exactly what is in the text.
+5. **Target Metric**: Best reported performance value as a number. Look for the main results or experiments. If not explicitly found, output exactly 0.0.
 6. **Metric Name**: Type of metric (e.g., "FID", "accuracy", "CLIP score", "BLEU"). DO NOT default to accuracy!
 7. **GitHub Links**: Any GitHub URLs mentioned (full URLs)
 8. **Key Claims**: Main performance claims (list)

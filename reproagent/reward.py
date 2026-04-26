@@ -102,14 +102,19 @@ class RewardFunction:
         if new_state.meta.success:
             components.success_bonus = self._success_bonus(new_state)
         
-        # Total
-        components.total_reward = (
+        # Total raw reward calculation
+        raw_total = (
             components.progress_reward +
             components.metric_reward -
             components.efficiency_penalty -
             components.error_penalty +
             components.success_bonus
         )
+        
+        # Normalize total reward between 0.0 and 1.0
+        # Theoretical max is roughly ~300-400 (Phases=~190, Success Bonus=~100-200, Metric=~50)
+        max_expected_reward = 400.0
+        components.total_reward = max(0.0, min(1.0, raw_total / max_expected_reward))
         
         return components
     

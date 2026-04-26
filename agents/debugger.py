@@ -211,19 +211,52 @@ Respond with JSON:
         return self._llm_generate_fix(error_analysis)
     
     def _llm_generate_fix(self, error_analysis: Dict[str, Any]) -> str:
-        """Use LLM to generate code fix."""
+        """Use LLM to generate code fix with full context."""
         
-        prompt = f"""
-Generate a code fix for this error:
+        error_msg = error_analysis.get('raw_error', '')
+        source_context = error_analysis.get('source_context', '')
+        file_list = error_analysis.get('file_list', '')
+        
+        prompt = f"""You are debugging a Python ML research repository that crashed.
 
-Error Type: {error_analysis['error_type']}
-Root Cause: {error_analysis['root_cause']}
+ERROR TYPE: {error_analysis.get('error_type', 'Unknown')}
+ROOT CAUSE: {error_analysis.get('root_cause', 'Unknown')}
 
-Provide the fix as Python code or shell command.
+FULL TRACEBACK:
+{error_msg[:1500]}
+
+SOURCE CODE OF ENTRY POINT:
+{source_context[:2000]}
+
+FILES IN REPO:
+{file_list[:500]}
+
+Generate EXACTLY ONE fix. Choose the most appropriate format:
+
+FORMAT 1 - Install missing package:
+pip install package_name
+
+FORMAT 2 - Modify a python source file (remove exit(0), fix np.int -> int, etc):
+{{
+    "fix_type": "code_modification",
+    "file": "exact_filename.py",
+    "search": "exact line(s) to find",
+    "replace": "replacement line(s)"
+}}
+
+FORMAT 3 - Download a file:
+wget URL
+
+RULES:
+- For code_modification, "search" must EXACTLY match text in the file
+- Missing module -> FORMAT 1
+- exit(0) after GPU check -> FORMAT 2 to remove exit
+- Deprecated numpy (np.int, np.float, np.bool) -> FORMAT 2 to use builtins
+- Return ONLY the fix, no explanation
 """
         
         try:
-            fix = self.llm.generate(prompt, max_tokens=200)
+            fix = self.llm.generate(prompt, max_tokens=500)
             return fix.strip()
         except:
             return "# Manual fix required"

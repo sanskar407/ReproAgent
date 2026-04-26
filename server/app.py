@@ -14,10 +14,6 @@ import re
 import json
 import time
 import traceback
-import uuid
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Generator
 
@@ -32,11 +28,6 @@ from reproagent.state import PaperState
 from reproagent.models import LLMClient
 from reproagent.papers import create_sample_papers
 from agents.reasoning_agent import create_agent
-
-# Modular Easy Mode Imports
-from server.llm_handler import generate_summary_and_ppt_content
-from server.pdf_processor import extract_text_from_pdf as extract_text_fitz
-from server.ppt_generator import create_ppt
 
 
 # ---------------------------------------------------------------------------
@@ -159,15 +150,15 @@ def extract_paper_info_llm(text: str, llm: LLMClient) -> Dict[str, Any]:
 2. abstract - The abstract (first 500 chars)
 3. github_links - Any GitHub repository URLs mentioned
 4. datasets - Datasets used (e.g., CIFAR-10, ImageNet)
-5. target_metric_name - Main evaluation metric name (e.g. FID, CLIP score, BLEU, accuracy). Extract this EXACTLY as written in the text. DO NOT default to accuracy.
-6. target_metric_value - The numerical claim for this metric (e.g. 7.5, 0.95). Extract EXACTLY as written. DO NOT normalize or guess.
+5. target_metric_name - Main evaluation metric name (e.g. FID, CLIP score, BLEU, accuracy). Extract EXACTLY as written.
+6. target_metric_value - The BEST numerical result claimed in the paper. Look in the abstract, results section, conclusion, and tables. For accuracy, report as a percentage number (e.g. 99.91 not 0.9991). For FID, report the raw number. NEVER return 0 or 0.0 — always find the actual result.
 7. model_name - The primary model architecture
 8. key_claims - List of 3-5 key claims from the paper
 
 Respond ONLY with valid JSON.
 
-Paper text (first 3000 chars):
-{text[:3000]}
+Paper text (first 6000 chars):
+{text[:6000]}
 """
     try:
         result = llm.generate_structured(prompt)
@@ -201,44 +192,6 @@ Paper text (first 3000 chars):
         traceback.print_exc()
 
     return {}
-
-
-def run_easy_mode(pdf_file: Any) -> Tuple[str, str]:
-    """Easy Mode: Summary + PPT generation using modular handlers."""
-    if not pdf_file:
-        return "Error: No file uploaded.", ""
-    
-    pdf_path = pdf_file.name if hasattr(pdf_file, 'name') else str(pdf_file)
-    safe_print(f"[EasyMode] Starting for {pdf_file}")
-    
-    safe_print("[EasyMode] Extracting text using fitz...")
-    text = extract_text_fitz(pdf_path)
-    if not text:
-        return "Error: Could not extract text from PDF.", ""
-    
-    # 1. Use modular LLM handler for summary and ppt structure
-    safe_print("[EasyMode] Calling Gemini via modular handler...")
-    data = generate_summary_and_ppt_content(text)
-    
-    paper_desc = data.get("description", "Failed to generate a description.")
-    slides_data = data.get("ppt_slides", [])
-    
-    if not slides_data:
-        # Fallback if no slides were generated
-        slides_data = [{"title": "Overview", "content": [paper_desc]}]
-
-    # 2. Use modular PPT generator
-    safe_print("[EasyMode] Generating premium PPT...")
-    ppt_filename = f"summary_{uuid.uuid4().hex[:8]}.pptx"
-    ppt_path = Path("data/tmp") / ppt_filename
-    ppt_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    create_ppt(slides_data, str(ppt_path))
-    
-    safe_print(f"[EasyMode] Saving PPT to {ppt_path}...")
-    safe_print("[EasyMode] Done.")
-    
-    return paper_desc, str(ppt_path)
 
 
 # ---------------------------------------------------------------------------
@@ -319,8 +272,7 @@ def run_paper_reproduction(
     paper_info = {}
     if use_llm:
         try:
-            # Enforce Groq for Medium/Advanced Mode
-            llm_client = LLMClient(provider="groq")
+            llm_client = LLMClient()
             if llm_client.provider != "mock":
                 yield (log(f"- Using **{llm_client.provider.upper()}** LLM for intelligent extraction"), "", "{}", "{}")
                 paper_info = extract_paper_info_llm(paper_text, llm_client)
@@ -344,10 +296,19 @@ def run_paper_reproduction(
     if metrics:
         metric_name = metrics[0].get("name", "Unknown")
         try:
-            val = float(metrics[0].get("value", "0.0"))
+            raw_val = str(metrics[0].get("value", "0.0")).replace("%", "").strip()
+            val = float(raw_val)
+            # Normalize: if metric is accuracy-like and value > 1, convert to decimal
+            if metric_name.lower() in ["accuracy", "acc", "top-1", "top-5", "precision", "recall", "f1"]:
+                if val > 1.0:
+                    val = val / 100.0  # 99.91 -> 0.9991
             target_metric = val
         except (ValueError, TypeError):
             pass
+    
+    # If metric is still 0.0, extraction failed
+    if target_metric == 0.0:
+        yield (log("- ⚠️ **Warning**: Could not extract target metric from paper. Results comparison will be limited."), "", "{}", "{}")
 
     # Build paper info markdown
     paper_info_md = f"""## Paper Information
@@ -366,7 +327,7 @@ def run_paper_reproduction(
         for claim in key_claims[:5]:
             paper_info_md += f"- {claim}\n"
 
-    yield (log(f"- Title: **{paper_title[:80]}**"), paper_info_md, "{}", "{}")
+    yield (log(f"- Title: **{paper_title[:150]}**"), paper_info_md, "{}", "{}")
     time.sleep(0.2)
     yield (log(f"- Found **{len(github_links)}** GitHub link(s)"), paper_info_md, "{}", "{}")
     yield (log(f"- Target: **{target_metric:.3f}** ({metric_name})\n"), paper_info_md, "{}", "{}")
@@ -398,7 +359,8 @@ def run_paper_reproduction(
             confidence=0.85,
         )
         env.state.experiment.target_metric = target_metric
-        env.state.experiment.gap = target_metric
+        # If target is 0.0 (extraction failed), set gap to 1.0 so we don't falsely declare success
+        env.state.experiment.gap = target_metric if target_metric > 0.0 else 1.0
 
         agent = create_agent(env, agent_type="reasoning", use_llm=use_llm)
         agent.reset()
@@ -443,6 +405,8 @@ def run_paper_reproduction(
     terminated = False
     truncated = False
 
+    previous_log_count = 0
+
     while not (terminated or truncated) and step < int(max_steps):
         action = agent.select_action(obs, info)
         obs, reward, terminated, truncated, info = env.step(action)
@@ -454,7 +418,14 @@ def run_paper_reproduction(
 
         # Get latest logs from env
         latest_logs = info.get("logs", [])
-        log_detail = latest_logs[-1] if latest_logs else ""
+        new_logs = latest_logs[previous_log_count:]
+        previous_log_count = len(latest_logs)
+
+        # Format logs as markdown blockquotes (Gradio renders these cleanly)
+        log_lines_fmt = []
+        for entry in new_logs:
+            log_lines_fmt.append(f"\n>   {entry}")
+        log_detail = "".join(log_lines_fmt)
 
         phase_icon = {
             "parsing": "📄", "repo_analysis": "🔍", "setup": "📦",
@@ -467,7 +438,7 @@ def run_paper_reproduction(
 
         line = f"{phase_icon} `{label[0]}` **{label[1]}**{metric_str}{reward_str}"
         if log_detail:
-            line += f"\n  - {log_detail}"
+            line += log_detail
 
         current_metrics = json.dumps({
             "step": step,
@@ -794,19 +765,6 @@ def create_demo():
         </div>
         """)
 
-        # --- API Endpoints (Hidden) ---
-        with gr.Group(visible=False):
-            easy_mode_input = gr.File(label="Easy Input")
-            easy_mode_output_text = gr.Textbox(label="Easy Text")
-            easy_mode_output_file = gr.File(label="Easy File")
-            easy_mode_btn = gr.Button("run_easy_mode")
-            easy_mode_btn.click(
-                fn=run_easy_mode,
-                inputs=[easy_mode_input],
-                outputs=[easy_mode_output_text, easy_mode_output_file],
-                api_name="run_easy_mode"
-            )
-
         with gr.Tabs():
             # ============================================================
             #  TAB 1 — Reproduce a Paper
@@ -818,6 +776,7 @@ def create_demo():
                     with gr.Column(scale=1):
                         pdf_upload = gr.File(
                             label="Upload PDF",
+                            file_types=[".pdf"],
                             type="filepath",
                         )
                         paper_url = gr.Textbox(
@@ -875,7 +834,6 @@ def create_demo():
 
                 reproduce_btn.click(
                     fn=run_paper_reproduction,
-                    api_name="run_paper_reproduction",
                     inputs=[pdf_upload, paper_url, use_llm_tab1, max_steps_tab1, exec_mode, clone_dir_tab1],
                     outputs=[agent_log, paper_info_display, metrics_display, state_display],
                 )
@@ -971,7 +929,7 @@ def create_demo():
 if __name__ == "__main__":
     demo = create_demo()
     demo.launch(
-        server_name="localhost",
+        server_name="0.0.0.0",
         server_port=7860,
         share=True,
         show_error=True,
