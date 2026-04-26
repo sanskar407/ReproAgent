@@ -36,8 +36,8 @@ pinned: false
 This project is submitted to the **OpenEnv Hackathon**. It is a fully compliant environment built on top of the framework.
 
 ### Required Materials
-- **Hugging Face Space**: [ReproAgent Live Demo](https://huggingface.co/spaces/Yusufarsh/ReproAgent)
-- **Training Script (SB3/PPO)**: [Colab Notebook](training/ReproAgent_Training_SB3.ipynb)
+- **Hugging Face Space**: [ReproAgent Live Demo](https://huggingface.co/spaces/Yusufarsh/repro-0.2.0)
+- **Training Script (SB3/PPO)**: [Colab Notebook](https://colab.research.google.com/drive/1EQGh1e-CSZYVYGv2GWN8tS5GY5Qoegsj?usp=sharing)
 - **Evidence of Training**: Trained using Stable-Baselines3 PPO over 5,000 steps. Mean episode reward reached **542** on the Easy difficulty.
   <br><img src="assets/reward_plot.png" alt="Reward Plot" width="400"/> <img src="assets/loss_plot.png" alt="Loss Plot" width="400"/>
   > Reward increases from ~-5 (untrained baseline) to ~+542 (trained agent). Loss stabilizes confirming convergence.
