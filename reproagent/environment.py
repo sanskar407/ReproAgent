@@ -470,16 +470,16 @@ class ReproAgentEnv(gym.Env):
             self.state.repo.url = url
             
             if self.exec_mode == "Real Execution":
-                import subprocess, os, shutil, re as _re
-                
-                # Extract repo name from URL for unique folder naming
-                repo_name = url.rstrip('/').split('/')[-1].replace('.git', '')
-                if not repo_name:
-                    repo_name = "repo"
-                target_dir = os.path.join(self.workspace_dir, repo_name)
-                
+                import subprocess, os, shutil, stat
+                target_dir = os.path.join(self.workspace_dir, "repo")
                 if os.path.exists(target_dir):
-                    shutil.rmtree(target_dir)  # clean slate
+                    def handle_remove_readonly(func, path, exc):
+                        try:
+                            os.chmod(path, stat.S_IWRITE)
+                            func(path)
+                        except Exception:
+                            pass
+                    shutil.rmtree(target_dir, onerror=handle_remove_readonly)  # clean slate
                 
                 os.makedirs(self.workspace_dir, exist_ok=True)
                 self.state.execution.logs.append(f"[EXEC] Cloning {url} into {target_dir}")

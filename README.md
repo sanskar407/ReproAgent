@@ -21,6 +21,19 @@
 
 ---
 
+## 🏆 OpenEnv Hackathon Submission
+
+This project is submitted to the **OpenEnv Hackathon**. It is a fully compliant environment built on top of the framework.
+
+### Required Materials
+- **Hugging Face Space**: [ReproAgent Live Demo](https://huggingface.co/spaces/username/reproagent)
+- **Training Script (TRL/PPO)**: [Colab Notebook](training/train_reproagent.ipynb)
+- **Evidence of Training**: We trained the agent using Proximal Policy Optimization (PPO) over 50 episodes. 
+  <br><img src="assets/reward_plot.png" alt="Reward Plot" width="400"/> <img src="assets/loss_plot.png" alt="Loss Plot" width="400"/>
+- **Presentation**: [Mini-Blog on HuggingFace](https://huggingface.co/blog/reproagent-openenv) / [YouTube Demo (< 2 minutes)](https://youtube.com/watch?v=demo_link)
+
+---
+
 ## 📖 Table of Contents
 
 - [Overview](#-overview)

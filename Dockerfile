@@ -1,3 +1,14 @@
+# Stage 1: Build React Frontend
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app/frontend
+# Copy only package files first for caching npm install
+COPY frontend/package*.json ./
+RUN npm ci
+# Copy the rest of the frontend source
+COPY frontend/ .
+RUN npm run build
+
+# Stage 2: Final Python Backend
 FROM python:3.10-slim
 
 # Set working directory
@@ -16,25 +27,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (including backend)
 COPY . .
 
+# Copy the built React app from Stage 1
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
 # Create necessary directories
-RUN mkdir -p data/papers/easy data/papers/medium data/papers/hard logs checkpoints
+RUN mkdir -p data/papers/easy data/papers/medium data/papers/hard logs checkpoints data/tmp
 
-# Create sample data
-RUN python -c "from reproagent.papers import create_sample_papers; create_sample_papers()" || true
-
-# Expose Gradio port
+# Expose port (Hugging Face Spaces uses 7860)
 EXPOSE 7860
 
 # Set environment variables
-ENV GRADIO_SERVER_NAME="0.0.0.0"
-ENV GRADIO_SERVER_PORT=7860
+ENV HOST="0.0.0.0"
+ENV PORT=7860
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:7860/ || exit 1
-
-# Run Gradio app
-CMD ["python", "server/app.py"]
+# Run FastAPI app
+CMD ["python", "server/api.py"]
