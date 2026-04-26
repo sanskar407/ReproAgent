@@ -18,7 +18,6 @@ GitPython>=3.1.0
 requests>=2.31.0
 
 # Demo
-gradio==6.10.0
 gradio-client==2.4.0
 hf-gradio==0.3.0
 huggingface-hub==1.8.0
