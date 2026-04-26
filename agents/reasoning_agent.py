@@ -102,6 +102,12 @@ class ReasoningAgent:
         elif state.meta.phase == Phase.EXPERIMENTATION:
             return self._experimentation_action(state)
         
+        elif state.meta.phase == Phase.COMPARISON:
+            if not getattr(state.meta, 'report_generated', False):
+                return self.action_space.get_id_by_action(ActionType.GENERATE_REPORT)
+            else:
+                return self.action_space.get_id_by_action(ActionType.STOP_PROCESS)
+        
         else:
             # Default: random exploration
             return self.env.action_space.sample()
@@ -114,9 +120,6 @@ class ReasoningAgent:
         
         elif not state.paper.github_links:
             return self.action_space.get_id_by_action(ActionType.EXTRACT_GITHUB)
-        
-        elif state.paper.target_metric == 0.0:
-            return self.action_space.get_id_by_action(ActionType.EXTRACT_METRICS)
         
         else:
             # Parsing is complete — move to repo cloning

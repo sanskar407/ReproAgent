@@ -123,8 +123,8 @@ Extract the following information from this research paper:
 2. **Abstract**: Paper abstract (if present)
 3. **Dataset**: Dataset used (e.g., "CIFAR-10", "ImageNet", "COCO")
 4. **Model**: Model architecture (e.g., "ResNet-50", "BERT", "GPT-2")
-5. **Target Metric**: Best reported performance value as a number (e.g., 95.0 for 95%)
-6. **Metric Name**: Type of metric (e.g., "accuracy", "F1", "BLEU")
+5. **Target Metric**: Best reported performance value as a number. Extract exactly what is in the text.
+6. **Metric Name**: Type of metric (e.g., "FID", "accuracy", "CLIP score", "BLEU"). DO NOT default to accuracy!
 7. **GitHub Links**: Any GitHub URLs mentioned (full URLs)
 8. **Key Claims**: Main performance claims (list)
 
@@ -137,8 +137,8 @@ Respond with ONLY valid JSON in this exact format:
     "abstract": "abstract text here",
     "dataset": "dataset name",
     "model": "model name",
-    "target_metric": 0.95,
-    "metric_name": "accuracy",
+    "target_metric": 12.34,
+    "metric_name": "FID",
     "github_links": ["https://github.com/user/repo"],
     "key_claims": ["claim 1", "claim 2"],
     "confidence": 0.9
