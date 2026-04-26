@@ -38,3 +38,4 @@ transformers
 datasets
 stable-baselines3
 shimmy
+pyaudioop
