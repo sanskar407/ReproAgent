@@ -164,3 +164,7 @@ uvicorn==0.42.0
 watchfiles==1.1.1
 websockets==16.0
 zipp==3.23.0
+
+# SB3 Training
+stable-baselines3>=2.0.0
+shimmy>=0.2.1

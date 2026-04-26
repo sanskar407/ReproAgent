@@ -1,3 +1,14 @@
+---
+title: ReproAgent
+emoji: 🔬
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.12.0
+app_file: server/app.py
+pinned: false
+---
+
 <p align="center">
   <img src="assets/banner.png" alt="ReproAgent Banner" width="100%"/>
 </p>
