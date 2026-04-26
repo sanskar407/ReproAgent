@@ -95,3 +95,6 @@ def create_ppt(slides_data, output_path):
     # Save the presentation
     prs.save(output_path)
     return output_path
+
+# Alias so both main.py and app.py can import it consistently
+generate_ppt = create_ppt
