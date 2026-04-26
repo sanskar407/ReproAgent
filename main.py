@@ -9,8 +9,13 @@ import sys
 import json
 import uuid
 import shutil
+import traceback
+import logging
 from pathlib import Path
 from typing import Optional
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Ensure project root is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -78,8 +83,12 @@ async def easy_mode(file: UploadFile = File(...)):
             "ppt_url": f"/api/download/{ppt_filename}"
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"[EASY MODE ERROR] {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
     finally:
         if pdf_path.exists():
             pdf_path.unlink()
