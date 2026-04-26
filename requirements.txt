@@ -7,7 +7,7 @@ pandas
 groq
 openai
 huggingface-hub
-google-generativeai
+google-genai
 
 # PDF Processing
 PyPDF2
